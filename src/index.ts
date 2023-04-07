@@ -1,3 +1,3 @@
 import Proxy from "./Proxy";
 
-export {Proxy};
+export { Proxy };
