@@ -1,0 +1,10 @@
+example
+src
+test
+.eslint*
+.prettier*
+tsconfig.json
+.husky
+.idea
+.github
+.lintstagedrc.js
