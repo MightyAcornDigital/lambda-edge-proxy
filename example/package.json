@@ -1,0 +1,11 @@
+{
+  "name": "lambda-edge-example",
+  "version": "1.0.0",
+  "description": "Example of using Lambda@Edge",
+  "main": "handler.ts",
+  "devDependencies": {
+    "serverless-offline-edge-lambda": "^1.2.3",
+    "serverless-plugin-typescript": "^2.1.4",
+    "typescript": "^5.0.3"
+  }
+}
