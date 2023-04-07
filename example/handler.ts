@@ -1,6 +1,6 @@
 import {CloudFrontRequestEvent} from 'aws-lambda';
 import {Issuer} from "openid-client";
-import {Proxy} from "@MightyAcornDigital/lambda-edge-proxy";
+import {Proxy} from "@mightyacorndigital/lambda-edge-proxy";
 
 export function onViewerRequest(event: CloudFrontRequestEvent) {
     const issuer = new Issuer({

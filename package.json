@@ -1,5 +1,5 @@
 {
-  "name": "@MightyAcornDigital/lambda-edge-proxy",
+  "name": "@mightyacorndigital/lambda-edge-proxy",
   "version": "0.0.1",
   "description": "Provides auth capabilities for lambda@edge viewer-request functions",
   "main": "dist/index.js",
