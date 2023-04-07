@@ -6,6 +6,7 @@
   "devDependencies": {
     "serverless-offline-edge-lambda": "^1.2.3",
     "serverless-plugin-typescript": "^2.1.4",
+    "serverless": "^2.60.1",
     "typescript": "^5.0.3"
   }
 }

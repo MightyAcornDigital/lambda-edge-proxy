@@ -1,6 +1,6 @@
 import {CloudFrontRequestEvent} from 'aws-lambda';
 import {Issuer} from "openid-client";
-import Proxy from "../src/Proxy";
+import {Proxy} from "@MightyAcornDigital/lambda-edge-proxy";
 
 export function onViewerRequest(event: CloudFrontRequestEvent) {
     const issuer = new Issuer({
@@ -26,7 +26,7 @@ export function onViewerRequest(event: CloudFrontRequestEvent) {
             // This is where you would implement your own authorization logic.
             // Use the token and userInfo to determine if the user is authorized, and throw an
             // error if they are not.
-            throw new Error('Not authorized');
+            // throw new Error('Not authorized');
         }
     });
     return handler.handleEvent(event);
