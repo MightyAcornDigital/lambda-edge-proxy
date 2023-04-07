@@ -1,24 +1,32 @@
 {
-  "name": "@MightyAcornDigital/lambda-edge-proxy",
+  "name": "@mightyacorndigital/lambda-edge-proxy",
   "version": "0.0.1",
   "description": "Provides auth capabilities for lambda@edge viewer-request functions",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "test": "jest"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
     "cookie": "^0.4.1",
-    "jsonwebtoken": "^9.0.0",
-    "oauth": "^0.10.0"
+    "jose": "^4.13.1",
+    "openid-client": "^5.4.0"
   },
   "devDependencies": {
-    "jest": "^29.5.0"
+    "@types/aws-lambda": "^8.10.114",
+    "@types/cookie": "^0.5.1",
+    "jest": "^29.5.0",
+    "jest-mock-extended": "^3.0.4",
+    "ts-jest": "^29.1.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.3"
   },
   "jest": {
+    "preset": "ts-jest",
     "testMatch": [
-      "**/test/*.js"
+      "**/test/*.ts"
     ]
   },
   "repository": {

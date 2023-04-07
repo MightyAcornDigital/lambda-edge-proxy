@@ -1,0 +1,23 @@
+
+service: edge-lambdas
+
+plugins:
+  - serverless-plugin-typescript
+  - serverless-offline-edge-lambda
+
+
+custom:
+  offlineEdgeLambda:
+    path: '.build'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+
+functions:
+  lambda:
+    handler: handler.onViewerRequest
+    lambdaAtEdge:
+      distribution: 'WebsiteDistribution'
+      eventType: 'viewer-request'
+#      pathPattern: '/lambda'

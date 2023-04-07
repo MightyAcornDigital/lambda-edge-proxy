@@ -22,5 +22,7 @@ jobs:
           cache: npm
       - name: Install Dependencies
         run: npm ci
+      - name: Check Compilation
+        run: npx tsc --noEmit
       - name: Unit Tests
         run: npx jest --ci --maxWorkers=3 --reporters=default --reporters=github-actions
