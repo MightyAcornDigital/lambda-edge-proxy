@@ -4,7 +4,8 @@
   "description": "Provides auth capabilities for lambda@edge viewer-request functions",
   "main": "dist/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "test": "jest"
   },
   "author": "",
   "license": "ISC",
