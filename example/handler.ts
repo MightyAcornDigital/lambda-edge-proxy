@@ -22,6 +22,7 @@ export function onViewerRequest(event: CloudFrontRequestEvent) {
         hashKey: 'test',
         // This will be your publicly accessible domain.
         baseUrl: 'http://localhost:8081',
+        scopes: ['user:email'],
         async authorizer(token, userInfo) {
             // This is where you would implement your own authorization logic.
             // Use the token and userInfo to determine if the user is authorized, and throw an
