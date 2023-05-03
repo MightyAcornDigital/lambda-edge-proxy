@@ -159,7 +159,32 @@ describe("Login endpoint", function () {
     );
     expect(client.authorizationUrl).toHaveBeenLastCalledWith({
       redirect_uri: "https://foo.bar/auth/callback?destination=/",
-      scope: "user:email",
+      scope: "openid",
+      state: expect.any(String),
+    });
+  });
+  test("Uses custom scopes in redirect URL", async function () {
+    const client = mockDeep<Client>();
+
+    // @ts-ignore - see https://github.com/marchaos/jest-mock-extended/issues/114
+    client.authorizationUrl.mockReturnValue(
+      "https://auth.me/authorize?redirect_uri=https%3A%2F%2Ffoo.bar%2Fauth%2Fcallback&state=%2F"
+    );
+    const proxy = new Proxy(client, {
+      baseUrl: "https://foo.bar",
+      hashKey: "valid",
+      logger: dummyLogger,
+      scopes: ["foo", "bar"],
+    });
+    await proxy.handleEvent(
+      makeEvent({
+        uri: "/auth/login",
+        headers: {},
+      })
+    );
+    expect(client.authorizationUrl).toHaveBeenLastCalledWith({
+      redirect_uri: "https://foo.bar/auth/callback?destination=/",
+      scope: "foo bar",
       state: expect.any(String),
     });
   });

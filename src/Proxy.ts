@@ -14,6 +14,7 @@ type ProxyOpts = {
   pathCallback?: string;
   pathLogout?: string;
   logger?: typeof console;
+  scopes?: string[];
 };
 
 type Authorizer = (
@@ -31,6 +32,7 @@ class Proxy {
   private logger: typeof console;
   private secret: Uint8Array;
   private authorize: Authorizer;
+  private scopes: string[];
 
   constructor(private client: Client, opts: ProxyOpts = {}) {
     if (!opts.hashKey)
@@ -44,6 +46,7 @@ class Proxy {
     this.logger = opts.logger || console;
     this.secret = new TextEncoder().encode(opts.hashKey);
     this.authorize = opts.authorizer || (() => Promise.resolve());
+    this.scopes = opts.scopes || ["openid"];
   }
 
   async handleEvent(event: CloudFrontRequestEvent) {
@@ -93,7 +96,7 @@ class Proxy {
     const authorizeURL = this.client.authorizationUrl({
       redirect_uri,
       state,
-      scope: "user:email",
+      scope: this.scopes.join(" "),
     });
 
     const response = {
