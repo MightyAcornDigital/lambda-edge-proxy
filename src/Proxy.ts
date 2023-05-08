@@ -1,9 +1,12 @@
 import { URLSearchParams } from "url";
 import cookie from "cookie";
-import { CloudFrontRequestEvent, CloudFrontRequest } from "aws-lambda";
-import { CloudFrontHeaders } from "aws-lambda/common/cloudfront";
+import {
+  CloudFrontRequestEvent,
+  CloudFrontRequest,
+  CloudFrontHeaders,
+} from "aws-lambda";
 import { SignJWT, jwtVerify, JWTPayload } from "jose";
-import { Client, generators, TokenSet, UserinfoResponse } from "openid-client";
+import { Client, generators, TokenSet } from "openid-client";
 
 type ProxyOpts = {
   baseUrl?: string;
@@ -17,10 +20,7 @@ type ProxyOpts = {
   scopes?: string[];
 };
 
-type Authorizer = (
-  token: TokenSet,
-  userInfo: UserinfoResponse
-) => Promise<void>;
+type Authorizer = (token: TokenSet) => Promise<void>;
 export const PROXY_PASS = Symbol("PROXY_PASS");
 
 class Proxy {
@@ -66,12 +66,23 @@ class Proxy {
       return this.handleLogin(request, currentUser);
     }
     if (request.uri === this.pathCallback) {
-      return this.handleCallback(request, currentUser);
+      return this.handleCallback(request, currentUser).catch((err) =>
+        this.handleAuthError(err)
+      );
     }
     if (request.uri === this.pathLogout) {
       return this.handleLogout(request, currentUser);
     }
     return this.handleRestricted(request, currentUser);
+  }
+
+  private handleAuthError(err: Error) {
+    this.logger.error("Error handling authentication:", err);
+    return Promise.resolve({
+      status: "403",
+      statusDescription: "Access denied",
+      body: "Access Denied",
+    });
   }
 
   /**
@@ -132,6 +143,13 @@ class Proxy {
     currentUser: null | JWTPayload
   ) {
     const qs = new URLSearchParams(request.querystring);
+
+    if (qs.has("error")) {
+      throw new Error(`${qs.get("error")} - ${qs.get("error_description")}`);
+    }
+    if (!qs.has("code")) {
+      throw new Error("Missing code");
+    }
     const state = qs.get("state") ?? undefined;
     const code = qs.get("code") ?? undefined;
     const next = this.filterDestination(qs.get("destination"));
@@ -143,56 +161,45 @@ class Proxy {
       this.pathCallback
     }?destination=${next}`;
 
-    try {
-      const tokenSet = await this.client.oauthCallback(
-        redirect_uri,
-        { code, state },
-        {
-          response_type: "code",
-          state: expected_state,
-        }
-      );
-      const userInfo = await this.client.userinfo(tokenSet);
-      if (!userInfo) throw new Error("No user info returned");
-      await this.authorize(tokenSet, userInfo);
-      const token = await new SignJWT({
-        tokenSet,
-        userInfo,
-      })
-        .setProtectedHeader({ alg: "HS256" })
-        .setIssuedAt()
-        .setExpirationTime("12h")
-        .sign(this.secret);
+    const tokenSet = await this.client.oauthCallback(
+      redirect_uri,
+      { code, state },
+      {
+        response_type: "code",
+        state: expected_state,
+      }
+    );
 
-      return this.sendTo(next, request, currentUser, {
-        "set-cookie": [
-          {
-            key: "Set-Cookie",
-            value: cookie.serialize(this.getAuthCookieName(), token, {
-              httpOnly: true,
-              secure: true,
-              path: "/",
-            }),
-          },
-          {
-            key: "Set-Cookie",
-            value: cookie.serialize(this.getAuthCookieName("state"), "", {
-              httpOnly: true,
-              secure: true,
-              path: "/",
-              expires: new Date(0),
-            }),
-          },
-        ],
-      });
-    } catch (err) {
-      this.logger.error("Error handling authentication:", err);
-      return Promise.resolve({
-        status: "403",
-        statusDescription: "Access denied",
-        body: "Access Denied",
-      });
-    }
+    await this.authorize(tokenSet);
+    const token = await new SignJWT({
+      tokenSet,
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime("12h")
+      .sign(this.secret);
+
+    return this.sendTo(next, request, currentUser, {
+      "set-cookie": [
+        {
+          key: "Set-Cookie",
+          value: cookie.serialize(this.getAuthCookieName(), token, {
+            httpOnly: true,
+            secure: true,
+            path: "/",
+          }),
+        },
+        {
+          key: "Set-Cookie",
+          value: cookie.serialize(this.getAuthCookieName("state"), "", {
+            httpOnly: true,
+            secure: true,
+            path: "/",
+            expires: new Date(0),
+          }),
+        },
+      ],
+    });
   }
 
   /**
