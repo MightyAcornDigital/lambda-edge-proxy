@@ -1,3 +1,3 @@
-import Proxy from "./Proxy";
+import Proxy, { PROXY_PASS } from "./Proxy";
 
-export { Proxy };
+export { Proxy, PROXY_PASS };

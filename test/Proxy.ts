@@ -1,6 +1,5 @@
 import { beforeEach, expect, describe, test } from "@jest/globals";
 import Proxy from "../src/Proxy";
-import { Client } from "openid-client";
 import { mock, mockDeep } from "jest-mock-extended";
 import {
   CloudFrontCustomOrigin,
@@ -10,6 +9,7 @@ import {
 } from "aws-lambda";
 import { SignJWT, jwtVerify } from "jose";
 import cookie from "cookie";
+import { OAuthApp } from "@octokit/oauth-app";
 
 // We need @ts-ignore because the types for jest-mock-extended are not correct.
 /* eslint-disable @typescript-eslint/ban-ts-comment */
@@ -63,10 +63,10 @@ function assertIsRequest(
 
 describe("Request interception", function () {
   let proxy: Proxy;
-  let client: Client;
+  let app: OAuthApp;
   beforeEach(function () {
-    client = mock<Client>();
-    proxy = new Proxy(client, {
+    app = mockDeep<OAuthApp>();
+    proxy = new Proxy(app, {
       baseUrl: "https://foo.bar",
       hashKey: "foo",
       logger: mock<typeof console>(),
@@ -78,7 +78,7 @@ describe("Request interception", function () {
     assertIsResponse(response);
     expect(response.status).toEqual("302");
     expect(response.headers.location[0].value).toEqual(
-      "/auth/login?destination=%2Ffoo"
+      "/oauth/login?destination=%2Ffoo"
     );
   });
 
@@ -135,20 +135,19 @@ describe("Request interception", function () {
 
 describe("Login endpoint", function () {
   test("Responds to request for login URL by  redirecting to authorize url", async function () {
-    const client = mockDeep<Client>();
-
+    const app = mockDeep<OAuthApp>();
     // @ts-ignore - see https://github.com/marchaos/jest-mock-extended/issues/114
-    client.authorizationUrl.mockReturnValue(
-      "https://auth.me/authorize?redirect_uri=https%3A%2F%2Ffoo.bar%2Fauth%2Fcallback&state=%2F"
-    );
-    const proxy = new Proxy(client, {
+    app.getWebFlowAuthorizationUrl.mockReturnValue({
+      url: "https://auth.me/authorize?redirect_uri=https%3A%2F%2Ffoo.bar%2Fauth%2Fcallback&state=%2F",
+    });
+    const proxy = new Proxy(app, {
       baseUrl: "https://foo.bar",
       hashKey: "valid",
       logger: dummyLogger,
     });
     const response = await proxy.handleEvent(
       makeEvent({
-        uri: "/auth/login",
+        uri: "/oauth/login",
         headers: {},
       })
     );
@@ -157,20 +156,20 @@ describe("Login endpoint", function () {
     expect(response.headers.location[0].value).toEqual(
       "https://auth.me/authorize?redirect_uri=https%3A%2F%2Ffoo.bar%2Fauth%2Fcallback&state=%2F"
     );
-    expect(client.authorizationUrl).toHaveBeenLastCalledWith({
-      redirect_uri: "https://foo.bar/auth/callback?destination=/",
-      scope: "openid",
+    expect(app.getWebFlowAuthorizationUrl).toHaveBeenLastCalledWith({
+      redirectUrl: "https://foo.bar/oauth/callback?destination=/",
+      scopes: ["openid"],
       state: expect.any(String),
     });
   });
   test("Uses custom scopes in redirect URL", async function () {
-    const client = mockDeep<Client>();
+    const app = mockDeep<OAuthApp>();
 
     // @ts-ignore - see https://github.com/marchaos/jest-mock-extended/issues/114
-    client.authorizationUrl.mockReturnValue(
-      "https://auth.me/authorize?redirect_uri=https%3A%2F%2Ffoo.bar%2Fauth%2Fcallback&state=%2F"
-    );
-    const proxy = new Proxy(client, {
+    app.getWebFlowAuthorizationUrl.mockReturnValue({
+      url: "https://auth.me/authorize?redirect_uri=https%3A%2F%2Ffoo.bar%2Fauth%2Fcallback&state=%2F",
+    });
+    const proxy = new Proxy(app, {
       baseUrl: "https://foo.bar",
       hashKey: "valid",
       logger: dummyLogger,
@@ -178,26 +177,30 @@ describe("Login endpoint", function () {
     });
     await proxy.handleEvent(
       makeEvent({
-        uri: "/auth/login",
+        uri: "/oauth/login",
         headers: {},
       })
     );
-    expect(client.authorizationUrl).toHaveBeenLastCalledWith({
-      redirect_uri: "https://foo.bar/auth/callback?destination=/",
-      scope: "foo bar",
+    expect(app.getWebFlowAuthorizationUrl).toHaveBeenLastCalledWith({
+      redirectUrl: "https://foo.bar/oauth/callback?destination=/",
+      scopes: ["foo", "bar"],
       state: expect.any(String),
     });
   });
   test("Sets a state cookie on redirecting to authorize url", async function () {
-    const client = mock<Client>();
-    const proxy = new Proxy(client, {
+    const app = mockDeep<OAuthApp>();
+    // @ts-ignore - see https://github.com/marchaos/jest-mock-extended/issues/114
+    app.getWebFlowAuthorizationUrl.mockReturnValue({
+      url: "https://auth.me/authorize?redirect_uri=https%3A%2F%2Ffoo.bar%2Fauth%2Fcallback&state=%2F",
+    });
+    const proxy = new Proxy(app, {
       baseUrl: "https://foo.bar",
       hashKey: "valid",
       logger: mock<typeof console>(),
     });
     const response = await proxy.handleEvent(
       makeEvent({
-        uri: "/auth/login",
+        uri: "/oauth/login",
         headers: {},
       })
     );
@@ -214,8 +217,8 @@ describe("Login endpoint", function () {
 describe("Logout endpoint", function () {
   let proxy: Proxy;
   beforeEach(function () {
-    const client = mock<Client>();
-    proxy = new Proxy(client, {
+    const app = mockDeep<OAuthApp>();
+    proxy = new Proxy(app, {
       baseUrl: "https://foo.bar",
       hashKey: "foo",
       logger: mock<typeof console>(),
@@ -224,7 +227,7 @@ describe("Logout endpoint", function () {
   test("Redirects to homepage on logout without destination", async function () {
     const response = await proxy.handleEvent(
       makeEvent({
-        uri: "/auth/logout",
+        uri: "/oauth/logout",
         headers: {},
       })
     );
@@ -236,7 +239,7 @@ describe("Logout endpoint", function () {
   test("Redirects to destination on logout with destination", async function () {
     const response = await proxy.handleEvent(
       makeEvent({
-        uri: "/auth/logout",
+        uri: "/oauth/logout",
         querystring: "destination=%2Ffoo",
         headers: {},
       })
@@ -249,7 +252,7 @@ describe("Logout endpoint", function () {
   test("Unsets the auth cookie on logout", async function () {
     const response = await proxy.handleEvent(
       makeEvent({
-        uri: "/auth/logout",
+        uri: "/oauth/logout",
         headers: {},
       })
     );
@@ -263,26 +266,18 @@ describe("Logout endpoint", function () {
 
 describe("Callback endpoint", function () {
   let proxy: Proxy;
-  let client: Client;
+  let app: OAuthApp;
   beforeEach(function () {
-    client = mock<Client>();
+    app = mockDeep<OAuthApp>();
     // @ts-ignore
-    client.oauthCallback.mockImplementation((_, { code }) => {
-      if (code === "letmein") {
-        return Promise.resolve({ access_token: "foo" });
+    app.createToken.mockImplementation(async (opts) => {
+      if (opts.code === "letmein") {
+        return { authentication: { token: "foo" } };
       } else {
-        return Promise.reject(new Error("Invalid code"));
+        throw new Error("Invalid code");
       }
     });
-    // @ts-ignore
-    client.userinfo.mockImplementation((token) => {
-      if (token.access_token === "foo") {
-        return { user: "dave" };
-      }
-      throw new Error("Invalid token");
-    });
-
-    proxy = new Proxy(client, {
+    proxy = new Proxy(app, {
       baseUrl: "https://foo.bar",
       hashKey: "foo",
       logger: mock<typeof console>(),
@@ -292,9 +287,11 @@ describe("Callback endpoint", function () {
   test("Responds to callback for valid code by redirecting to destination", async function () {
     const response = await proxy.handleEvent(
       makeEvent({
-        uri: "/auth/callback",
-        querystring: "code=letmein&destination=%2Ffoo",
-        headers: {},
+        uri: "/oauth/callback",
+        querystring: "code=letmein&destination=%2Ffoo&state=foostate",
+        headers: {
+          cookie: [{ key: "Cookie", value: "_auth.state=foostate" }],
+        },
       })
     );
     assertIsResponse(response);
@@ -305,9 +302,11 @@ describe("Callback endpoint", function () {
   test("Responds to callback for valid code by setting an auth cookie", async function () {
     const response = await proxy.handleEvent(
       makeEvent({
-        uri: "/auth/callback",
-        querystring: "code=letmein",
-        headers: {},
+        uri: "/oauth/callback",
+        querystring: "code=letmein&state=foostate",
+        headers: {
+          cookie: [{ key: "Cookie", value: "_auth.state=foostate" }],
+        },
       })
     );
     // Cookie should be secure and HttpOnly.
@@ -321,17 +320,32 @@ describe("Callback endpoint", function () {
       new TextEncoder().encode("foo")
     );
     expect(parsed.payload).toMatchObject({
-      tokenSet: { access_token: "foo" },
-      userInfo: { user: "dave" },
+      token: "foo",
     });
   });
 
   test("Responds to callback for invalid code by throwing access denied", async function () {
     const response = await proxy.handleEvent(
       makeEvent({
-        uri: "/auth/callback",
-        querystring: "code=invalidcode",
-        headers: {},
+        uri: "/oauth/callback",
+        querystring: "code=invalidcode&state=foostate",
+        headers: {
+          cookie: [{ key: "Cookie", value: "_auth.state=foostate" }],
+        },
+      })
+    );
+    assertIsResponse(response);
+    expect(response.status).toEqual("403");
+  });
+
+  test("Response to callback for invalid state by throwing access denied", async function () {
+    const response = await proxy.handleEvent(
+      makeEvent({
+        uri: "/oauth/callback",
+        querystring: "code=letmein&state=barstate",
+        headers: {
+          cookie: [{ key: "Cookie", value: "_auth.state=foostate" }],
+        },
       })
     );
     assertIsResponse(response);
