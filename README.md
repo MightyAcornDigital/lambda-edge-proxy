@@ -16,7 +16,7 @@ A basic template for the lambda handler looks something like [this example](./ex
 
 The proxy is configured by passing in two arguments:
 
-1. The `openid-client` Client you wish to use. This proxy has only been tested with the Github client, although other providers may work as well.
+1. The `@octokit/oauth-app` Application you wish to use. This can be either a regular OAuth app, or a Github app.
 2. The configuration options for the proxy:
 
 - **REQUIRED** `hashKey`: A unique string used for generating a hash.
