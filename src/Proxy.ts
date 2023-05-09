@@ -163,14 +163,11 @@ class Proxy {
       throw new Error("Invalid state");
     }
 
-    await this.app.createToken({
-      code,
-    });
-
     const {
       authentication: { token },
     } = await this.app.createToken({
       code,
+      state,
     });
 
     await this.authorize(token);
