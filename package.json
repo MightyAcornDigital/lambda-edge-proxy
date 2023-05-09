@@ -11,9 +11,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@octokit/oauth-app": "^4.2.1",
     "cookie": "^0.4.1",
-    "jose": "^4.13.1",
-    "openid-client": "^5.4.0"
+    "jose": "^4.13.1"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.114",

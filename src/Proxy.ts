@@ -6,7 +6,8 @@ import {
   CloudFrontHeaders,
 } from "aws-lambda";
 import { SignJWT, jwtVerify, JWTPayload } from "jose";
-import { Client, generators, TokenSet } from "openid-client";
+import { OAuthApp } from "@octokit/oauth-app";
+import { randomBytes } from "crypto";
 
 type ProxyOpts = {
   baseUrl?: string;
@@ -20,7 +21,7 @@ type ProxyOpts = {
   scopes?: string[];
 };
 
-type Authorizer = (token: TokenSet) => Promise<void>;
+type Authorizer = (token: string) => Promise<void>;
 export const PROXY_PASS = Symbol("PROXY_PASS");
 
 class Proxy {
@@ -34,15 +35,15 @@ class Proxy {
   private authorize: Authorizer;
   private scopes: string[];
 
-  constructor(private client: Client, opts: ProxyOpts = {}) {
+  constructor(private app: OAuthApp, opts: ProxyOpts = {}) {
     if (!opts.hashKey)
       throw new Error("opts.hashKey must be set when constructing proxy");
 
     this.baseUrl = opts.baseUrl || false;
     this.authCookieName = opts.authCookieName || "_auth";
-    this.pathLogin = opts.pathLogin || "/auth/login";
-    this.pathCallback = opts.pathCallback || "/auth/callback";
-    this.pathLogout = opts.pathLogout || "/auth/logout";
+    this.pathLogin = opts.pathLogin || "/oauth/login";
+    this.pathCallback = opts.pathCallback || "/oauth/callback";
+    this.pathLogout = opts.pathLogout || "/oauth/logout";
     this.logger = opts.logger || console;
     this.secret = new TextEncoder().encode(opts.hashKey);
     this.authorize = opts.authorizer || (() => Promise.resolve());
@@ -92,7 +93,7 @@ class Proxy {
    * @param currentUser
    * @return {*}
    */
-  private handleLogin(
+  private async handleLogin(
     request: CloudFrontRequest,
     currentUser: null | JWTPayload
   ) {
@@ -100,14 +101,14 @@ class Proxy {
     const next = this.filterDestination(qs.get("destination"));
     if (currentUser !== null) return this.sendTo(next, request, currentUser);
 
-    const state = generators.state();
+    const state = randomBytes(32).toString("base64url");
     const redirect_uri = `${this.getBaseUrl(request)}${
       this.pathCallback
     }?destination=${next}`;
-    const authorizeURL = this.client.authorizationUrl({
-      redirect_uri,
+    const { url: authorizeURL } = await this.app.getWebFlowAuthorizationUrl({
       state,
-      scope: this.scopes.join(" "),
+      redirectUrl: redirect_uri,
+      scopes: this.scopes,
     });
 
     const response = {
@@ -147,32 +148,34 @@ class Proxy {
     if (qs.has("error")) {
       throw new Error(`${qs.get("error")} - ${qs.get("error_description")}`);
     }
-    if (!qs.has("code")) {
+    const code = qs.get("code") ?? undefined;
+    if (!code) {
       throw new Error("Missing code");
     }
     const state = qs.get("state") ?? undefined;
-    const code = qs.get("code") ?? undefined;
+
     const next = this.filterDestination(qs.get("destination"));
     const expected_state = cookie.parse(
       request.headers.cookie?.[0].value ?? ""
     )[this.getAuthCookieName("state")];
 
-    const redirect_uri = `${this.getBaseUrl(request)}${
-      this.pathCallback
-    }?destination=${next}`;
+    if (state !== expected_state) {
+      throw new Error("Invalid state");
+    }
 
-    const tokenSet = await this.client.oauthCallback(
-      redirect_uri,
-      { code, state },
-      {
-        response_type: "code",
-        state: expected_state,
-      }
-    );
+    await this.app.createToken({
+      code,
+    });
 
-    await this.authorize(tokenSet);
-    const token = await new SignJWT({
-      tokenSet,
+    const {
+      authentication: { token },
+    } = await this.app.createToken({
+      code,
+    });
+
+    await this.authorize(token);
+    const jwt = await new SignJWT({
+      token,
     })
       .setProtectedHeader({ alg: "HS256" })
       .setIssuedAt()
@@ -183,7 +186,7 @@ class Proxy {
       "set-cookie": [
         {
           key: "Set-Cookie",
-          value: cookie.serialize(this.getAuthCookieName(), token, {
+          value: cookie.serialize(this.getAuthCookieName(), jwt, {
             httpOnly: true,
             secure: true,
             path: "/",
