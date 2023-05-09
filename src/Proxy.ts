@@ -35,7 +35,8 @@ class Proxy {
   private authorize: Authorizer;
   private scopes: string[];
 
-  constructor(private app: OAuthApp, opts: ProxyOpts = {}) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  constructor(private app: OAuthApp<any>, opts: ProxyOpts = {}) {
     if (!opts.hashKey)
       throw new Error("opts.hashKey must be set when constructing proxy");
 
